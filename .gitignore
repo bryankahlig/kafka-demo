@@ -54,3 +54,4 @@ target
 # Ensime
 .ensime*
 ensime.sbt
+*.swp
