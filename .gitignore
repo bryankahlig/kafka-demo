@@ -52,5 +52,5 @@ fabric.properties
 target
 
 # Ensime
-.ensime
+.ensime*
 ensime.sbt
