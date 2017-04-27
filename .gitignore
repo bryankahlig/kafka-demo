@@ -50,3 +50,7 @@ fabric.properties
 
 # Scala
 target
+
+# Ensime
+.ensime
+ensime.sbt
