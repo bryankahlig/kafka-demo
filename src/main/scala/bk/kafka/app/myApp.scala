@@ -1,5 +1,7 @@
 package bk.kafka.app
 
+import java.util.concurrent.ThreadLocalRandom
+
 import akka.actor.ActorSystem
 import akka.kafka.{ConsumerSettings, ProducerMessage, ProducerSettings, Subscriptions}
 import akka.kafka.scaladsl.{Consumer, Producer}
@@ -10,7 +12,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, StringDeserializer, StringSerializer}
+
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object myApp
@@ -26,30 +30,40 @@ object myApp
 
   val topicName = "test"
 
-  system.scheduler.schedule(1.second,
-    10.second
-  )(Source(1 to 23)
-    .map(_.toString)
-    .map { elem =>
-      new ProducerRecord[Array[Byte], String](topicName, elem)
+//  system.scheduler.schedule(1.second,
+//    10.second
+//  )(Source(1 to 23)
+//    .map(_.toString)
+//    .map { elem =>
+//      new ProducerRecord[Array[Byte], String](topicName, elem)
+//    }
+//    .runWith(Producer.plainSink(producerSettings)))
+
+
+  Future {
+    Source.fromIterator(() => Iterator.continually(ThreadLocalRandom.current().nextInt()))
+      .map(_.toString)
+      .map( elem => new ProducerRecord[Array[Byte], String](topicName, elem))
+      .runWith(Producer.plainSink(producerSettings))
+  }
+
+
+  Future {
+    val consumerSettings = ConsumerSettings(system, new ByteArrayDeserializer, new StringDeserializer)
+      .withBootstrapServers("localhost:9092")
+      .withGroupId("group1")
+      .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
+    val db = new OffsetDb
+    db.loadOffset().foreach { fromOffset =>
+      val partition = 0
+      val subscription = Subscriptions.assignmentWithOffset(
+        new TopicPartition(topicName, partition) -> fromOffset
+      )
+      val done =
+        Consumer.plainSource(consumerSettings, subscription)
+          .mapAsync(1)(db.save)
+          .runWith(Sink.ignore)
     }
-    .runWith(Producer.plainSink(producerSettings)))
-
-
-  val consumerSettings = ConsumerSettings(system, new ByteArrayDeserializer, new StringDeserializer)
-    .withBootstrapServers("localhost:9092")
-    .withGroupId("group1")
-    .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-
-  val db = new OffsetDb
-  db.loadOffset().foreach { fromOffset =>
-    val partition = 0
-    val subscription = Subscriptions.assignmentWithOffset(
-      new TopicPartition(topicName, partition) -> fromOffset
-    )
-    val done =
-      Consumer.plainSource(consumerSettings, subscription)
-        .mapAsync(1)(db.save)
-        .runWith(Sink.ignore)
   }
 }

@@ -56,3 +56,6 @@ target
 .ensime*
 ensime.sbt
 *.swp
+
+# logs
+*.log
